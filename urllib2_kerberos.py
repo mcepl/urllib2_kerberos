@@ -180,6 +180,7 @@ class HTTPKerberosAuthHandler(u2.BaseHandler, AbstractKerberosAuthHandler):
 
     def http_error_401(self, req, fp, code, msg, headers):
         log.debug("inside http_error_401")
+        log.debug('req = %s', req)
         host = req.get_host()
         retry = self.http_error_auth_reqed(host, req, headers)
         self.retried = 0
@@ -192,7 +193,7 @@ def test():
     opener = u2.build_opener()
     opener.add_handler(HTTPKerberosAuthHandler())
     resp = opener.open(sys.argv[1])
-    print dir(resp), resp.info(), resp.code
+    print resp.info(), resp.code
 
 
 if __name__ == '__main__':
