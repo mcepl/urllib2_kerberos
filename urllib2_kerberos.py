@@ -46,6 +46,7 @@ class AbstractKerberosAuthHandler:
         """checks for "Negotiate" in proper auth header
         """
         authreq = headers.get(self.auth_header, None)
+        log.debug('authreq = {}'.format(authreq))
 
         if authreq:
             rx = re.compile(r'(?:.*,)*\s*Negotiate\s*([^,]*),?', re.I)
@@ -136,7 +137,8 @@ class AbstractKerberosAuthHandler:
             req.add_unredirected_header(self.authz_header, neg_hdr)
             resp = self.parent.open(req)
 
-            self.authenticate_server(resp.info())
+            if resp.getcode() != 200:
+                self.authenticate_server(resp.info())
 
             return resp
 
