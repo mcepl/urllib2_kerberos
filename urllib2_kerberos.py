@@ -22,7 +22,10 @@ import logging
 import sys
 import urllib2 as u2
 
-import kerberos as k
+try:
+    import gssapi
+except ImportError:
+    import kerberos
 
 def getLogger():
     log = logging.getLogger("http_kerberos_auth_handler")
@@ -68,8 +71,13 @@ class AbstractKerberosAuthHandler:
         log.debug("req.get_host() returned %s" % host)
 
         domain = host.rsplit(':', 1)[0]
-                
-        result, self.context = k.authGSSClientInit("HTTP@%s" % domain)
+
+        # result, self.context = kerberos.authGSSClientInit("HTTP@%s" % domain)
+        service_name = gssapi.Name("HTTP@%s" % domain,
+                                   gssapi.C_NT_HOSTBASED_SERVICE)
+
+        ctx = gssapi.InitContext(service_name,
+                                 mech_type=gssapi.oids.OID.mech_from_string("1.3.6.1.5.5.2"))
 
         if result < 1:
             log.warning("authGSSClientInit returned result %d" % result)
@@ -77,7 +85,7 @@ class AbstractKerberosAuthHandler:
 
         log.debug("authGSSClientInit() succeeded")
 
-        result = k.authGSSClientStep(self.context, neg_value)
+        result = kerberos.authGSSClientStep(self.context, neg_value)
 
         if result < 0:
             log.warning("authGSSClientStep returned result %d" % result)
@@ -85,9 +93,9 @@ class AbstractKerberosAuthHandler:
 
         log.debug("authGSSClientStep() succeeded")
 
-        response = k.authGSSClientResponse(self.context)
+        response = kerberos.authGSSClientResponse(self.context)
         log.debug("authGSSClientResponse() succeeded")
-        
+
         return "Negotiate %s" % response
 
     def authenticate_server(self, headers):
@@ -96,7 +104,7 @@ class AbstractKerberosAuthHandler:
             log.critical("mutual auth failed. No negotiate header")
             return None
 
-        result = k.authGSSClientStep(self.context, neg_value)
+        result = kerberos.authGSSClientStep(self.context, neg_value)
 
         if  result < 1:
             # this is a critical security warning
@@ -107,7 +115,7 @@ class AbstractKerberosAuthHandler:
     def clean_context(self):
         if self.context is not None:
             log.debug("cleaning context")
-            k.authGSSClientClean(self.context)
+            kerberos.authGSSClientClean(self.context)
             self.context = None
 
     def http_error_auth_reqed(self, host, req, headers):
@@ -135,7 +143,7 @@ class AbstractKerberosAuthHandler:
 
             return resp
 
-        except k.GSSError, e:
+        except kerberos.GSSError as e:
             self.clean_context()
             self.retried = 0
             log.critical("GSSAPI Error: %s/%s" % (e[0][0], e[1][0]))
@@ -151,7 +159,7 @@ class ProxyKerberosAuthHandler(u2.BaseHandler, AbstractKerberosAuthHandler):
     authz_header = 'Proxy-Authorization'
     auth_header = 'proxy-authenticate'
 
-    handler_order = 480 # before Digest auth
+    handler_order = 480  # before Digest auth
 
     def http_error_407(self, req, fp, code, msg, headers):
         log.debug("inside http_error_407")
@@ -183,8 +191,7 @@ def test():
     opener.add_handler(HTTPKerberosAuthHandler())
     resp = opener.open(sys.argv[1])
     print dir(resp), resp.info(), resp.code
-    
+
 
 if __name__ == '__main__':
     test()
-
